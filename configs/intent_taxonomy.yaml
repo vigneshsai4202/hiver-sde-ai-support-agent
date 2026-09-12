@@ -1,0 +1,12 @@
+version: "1.0"
+intents:
+  IOS_UPDATE: "Installing, obtaining, or troubleshooting an operating-system update."
+  DEVICE_PERFORMANCE: "Crashes, freezing, restarting, lag, severe slowness, or general device malfunction."
+  BATTERY_POWER: "Battery drain, charging, or power-related problems."
+  CONNECTIVITY: "Wi-Fi, Bluetooth, cellular, or other connection/network problems."
+  APPS_APP_STORE: "App Store, app installation/download, or generic application problems."
+  APPLE_ID_ICLOUD: "Apple ID, authentication, sign-in, or general iCloud account access."
+  MEDIA_SERVICES: "Apple Music, Podcasts, iTunes/media playback or library problems."
+  PAYMENTS_PURCHASES: "Charges, billing, payments, purchases, or refunds."
+  DATA_BACKUP_RESTORE: "Backup, restore, recovery, synchronization, or data-recovery problems."
+  OTHER: "Does not fit the taxonomy or has insufficient information."

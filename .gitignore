@@ -1,0 +1,59 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*.pyo
+
+# =========================
+# Virtual environments
+# =========================
+.venv/
+venv/
+
+# =========================
+# Environment / secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# Raw / large datasets
+# =========================
+data/raw/*
+!data/raw/.gitkeep
+
+# =========================
+# Generated / processed data
+# =========================
+data/processed/*
+!data/processed/.gitkeep
+
+# =========================
+# Samples
+# =========================
+data/samples/*
+!data/samples/.gitkeep
+
+# =========================
+# Generated report results
+# =========================
+reports/results/*
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDE
+# =========================
+.vscode/
+.idea/

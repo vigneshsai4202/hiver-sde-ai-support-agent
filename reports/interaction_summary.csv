@@ -1,0 +1,7 @@
+metric,value
+interactions,468455.0
+unique_customer_tweets,437412.0
+unique_support_tweets,468455.0
+unique_brands,108.0
+median_response_minutes,20.716666666666665
+p95_response_minutes,1227.986666666666
