@@ -1,230 +1,316 @@
-# Hiver SDE Intern — AI Support Agent
+# AI Support Agent for AppleSupport
 
-AI support-agent prototype built for **AppleSupport** using the **Customer Support on Twitter** dataset.
+An end-to-end prototype AI support agent that classifies customer support requests, retrieves historical evidence, generates grounded responses, and makes escalation decisions. Built with historical AppleSupport customer-support interactions from Twitter.
 
-The system learns from historically observed AppleSupport customer-support interactions and uses them as evidence for intent classification, response drafting, and escalation decisions.
+## Overview
 
-## What it does
+The system processes incoming customer messages through a five-stage pipeline:
 
-Given a customer message, the system:
+1. **Intent Classification** — Classify the customer's support problem into one of 10 intents (e.g., battery drain, connectivity, device performance)
+2. **Historical Retrieval** — Retrieve similar historical AppleSupport interactions as evidence for how similar problems were handled
+3. **Grounded Response Generation** — Generate a response grounded in retrieved historical examples
+4. **Escalation Decision** — Decide whether to handle automatically or escalate to human review
+5. **Reasoning** — Provide a transparent reason for the escalation decision
 
-1. Classifies the primary support intent
-2. Retrieves historically similar AppleSupport interactions
-3. Generates a grounded draft response
-4. Decides whether to `AUTO` handle or `ESCALATE`
-5. Provides a reason for the escalation decision
-
-### High-level flow
-
-```text
+```
 Customer Message
-       |
-       v
-Intent Classification
-       |
-       v
-Historical Retrieval
-       |
-       v
-Grounded Response Generation
-       |
-       v
-Escalation Decision
-       |
-       +----> AUTO
-       |
-       +----> ESCALATE
-Selected Brand
+       ↓
+Intent Classification → (confidence score)
+       ↓
+Historical Retrieval → (top-k similar interactions)
+       ↓
+Response Generation → (grounded in historical evidence)
+       ↓
+Escalation Decision → AUTO or ESCALATE
+       ↓
+Escalation Reason
+```
 
-The selected brand is AppleSupport.
+## Problem Framing
 
-The dataset contains customer-support interactions from many brands. I first audited the dataset, validated parent/response relationships, reconstructed conversation structure, and then extracted direct customer → support interactions.
+**Intent Classification**  
+Map each customer message to one of 10 support intents. Use previous conversation context when available to disambiguate follow-up messages.
 
-For the final support-agent pipeline, AppleSupport was selected because it provides a sufficiently large set of historical support interactions.
+**Historical Evidence**  
+Support replies are treated as handling *evidence*, not proof of resolution. A historical response may represent:
+- An initial troubleshooting step
+- A request for additional information
+- A request to escalate privately
+- Another form of support action
 
-The final AppleSupport interaction corpus contains approximately 32.8K direct customer → AppleSupport support interactions.
+**Escalation Decision**  
+Determine whether the system can AUTO handle the request or should ESCALATE to a human agent. This is a high-recall task—missing an escalation is costly.
 
-Intent Taxonomy
+## Selected Brand: AppleSupport
 
-The system uses a 10-intent taxonomy consisting of nine primary support intents plus OTHER.
+The system was trained on interactions from **AppleSupport**, selected from the Customer Support on Twitter dataset because it provides a sufficiently large and representative corpus of technical support interactions.
 
-IOS_UPDATE
-DEVICE_PERFORMANCE
-BATTERY_POWER
-CONNECTIVITY
-APPS_APP_STORE
-APPLE_ID_ICLOUD
-MEDIA_SERVICES
-PAYMENTS_PURCHASES
-DATA_BACKUP_RESTORE
-OTHER
+The final AppleSupport interaction corpus contains approximately **32.8K direct customer → AppleSupport support interactions**.
 
-The taxonomy is intentionally small so that the classifier focuses on the customer's primary support problem rather than attempting to model every possible issue.
+## Intent Taxonomy
 
-Previous conversation context is also considered when classifying follow-up messages.
+A 10-intent taxonomy ensures the classifier focuses on the customer's primary support problem:
 
-Historical Evidence
+| Intent | Description |
+|--------|-------------|
+| `IOS_UPDATE` | Installing, obtaining, or troubleshooting an operating-system update |
+| `DEVICE_PERFORMANCE` | Crashes, freezing, restarting, lag, severe slowness, or general device malfunction |
+| `BATTERY_POWER` | Battery drain, charging, or power-related problems |
+| `CONNECTIVITY` | Wi-Fi, Bluetooth, cellular, or other connection/network problems |
+| `APPS_APP_STORE` | App Store, app installation/download, or generic application problems |
+| `APPLE_ID_ICLOUD` | Apple ID, authentication, sign-in, or general iCloud account access |
+| `MEDIA_SERVICES` | Apple Music, Podcasts, iTunes/media playback or library problems |
+| `PAYMENTS_PURCHASES` | Charges, billing, payments, purchases, or refunds |
+| `DATA_BACKUP_RESTORE` | Backup, restore, recovery, synchronization, or data-recovery problems |
+| `OTHER` | Does not fit the taxonomy or has insufficient information |
 
-Historical customer-support interactions are used as evidence for how AppleSupport historically handled similar requests.
+## Historical Retrieval
 
-The system does not assume that a historical support reply proves that the customer's issue was resolved.
+Historical customer-support interactions are retrieved using **TF-IDF cosine similarity** on the customer's message.
 
-This distinction is important because a support reply may represent:
+The retriever:
+- Normalizes URLs and mentions
+- Uses word bigrams
+- Applies sublinear TF scaling
+- Retrieves the most similar historical customer messages and their corresponding AppleSupport replies
 
-an initial troubleshooting step
-a request for additional information
-a request to continue the conversation privately
-an escalation
-or another support action
+Retrieved examples inform response generation but do not guarantee grounding—a similar historical example can still lead to an unsupported generated response.
 
-Historical responses are therefore treated as handling evidence rather than guaranteed solutions.
+## Response Generation
 
-Quick Start
-1. Clone the repository
+Responses are generated using **Groq** with the **openai/gpt-oss-20b** model.
+
+The generator is instructed to:
+- Use retrieved interactions as historical evidence
+- Avoid copying historical replies verbatim
+- Avoid claiming a historical action definitely solved the issue
+- Avoid inventing policies, troubleshooting steps, guarantees, or technical facts
+
+## Escalation Decision
+
+The current rule-based escalation policy escalates when:
+- Intent confidence is below a threshold
+- Historical retrieval evidence is weak
+- The intent is payment/transaction related (`PAYMENTS_PURCHASES`)
+
+**Note:** The escalation recall is deliberately conservative (6.9%), which means the policy intentionally errs toward human escalation. This is appropriate for high-stakes support but is not well-optimized for balancing precision and recall.
+
+## Quick Start
+
+### 1. Clone the repository
+
+```bash
 git clone https://github.com/vigneshsai4202/hiver-sde-ai-support-agent.git
 cd hiver-sde-ai-support-agent
-2. Install dependencies
-pip install -r requirements.txt
+```
 
-A virtual environment is recommended:
+### 2. Set up Python environment
 
+```bash
+# Create virtual environment
 python -m venv venv
 
-Windows:
+# Activate (Linux/macOS)
+source venv/bin/activate
 
+# Activate (Windows)
 venv\Scripts\activate
+```
 
-Then:
+### 3. Install dependencies
 
+```bash
 pip install -r requirements.txt
-3. Configure the API key
+```
 
-Create a .env file in the project root:
+### 4. Configure Groq API key
 
+Create a `.env` file in the project root:
+
+```
 GROQ_API_KEY=your_key_here
+```
 
 The API key is not committed to the repository.
 
-The current implementation uses the Groq API with:
+### 5. Run the end-to-end example
 
-Model: openai/gpt-oss-20b
-4. Run the end-to-end example
+```bash
 python scripts/12_test_response.py
+```
 
-This runs the complete pipeline:
+This script:
+- Takes a sample customer message
+- Classifies intent
+- Retrieves historical examples
+- Generates a response
+- Makes an escalation decision
+- Prints the full pipeline output
 
-Customer message
-    ↓
-Intent classification
-    ↓
-Historical retrieval
-    ↓
-Response generation
-    ↓
-Escalation decision
+## Evaluation
 
-The example prints the predicted intent, confidence, retrieval evidence, generated response, escalation decision, and reason.
+The repository includes a frozen 200-example golden evaluation set in `data/golden/golden_set_v1.csv`. Examples were sampled across representative, hard, and edge cases, then AI-assisted labeled and manually reviewed.
 
-Evaluation
+**Note:** Golden labels are AI-assisted and manually reviewed, not independent multi-annotator ground truth.
 
-The repository contains a frozen 200-example golden set:
+### Intent Classification
 
-data/golden/golden_set_v1.csv
-
-The examples were sampled from AppleSupport interactions across representative, hard, and edge cases and then AI-assisted labeled and manually reviewed.
-
-Intent classification
-
-Run:
-
+```bash
 python scripts/10_evaluate_ai_classifier.py
+```
 
-This evaluates the Groq-based classifier against the reviewed golden set.
+Evaluates the Groq-based classifier against the golden set using accuracy and macro F1.
 
-Response generation
+### Baseline: Majority Class
 
-Run:
+```bash
+python scripts/07_baseline_majority.py
+```
 
+Evaluates a majority-class baseline (always predicting the most common intent).
+
+### Baseline: TF-IDF + Logistic Regression
+
+```bash
+python scripts/08_baseline_tfidf.py
+```
+
+Evaluates a traditional ML baseline using TF-IDF features and logistic regression on an 80/20 stratified split.
+
+### Response Generation
+
+```bash
 python scripts/14_evaluate_responses.py
+```
 
-This evaluates the response-generation pipeline using the golden examples, historical retrieval, and Groq response generation.
+Evaluates the full response-generation pipeline on golden examples.
 
-Escalation
+### Escalation Decision
 
-Run:
-
+```bash
 python scripts/15_evaluate_escalation.py
+```
 
-This evaluates the AUTO vs ESCALATE decision against reviewed escalation labels.
+Evaluates AUTO vs ESCALATE decisions against reviewed escalation labels.
 
-LLM-as-judge
+### LLM-as-Judge
 
-Run:
-
+```bash
 python scripts/17_llm_judge.py
+```
 
-The judge evaluates generated responses on:
+Uses an LLM to evaluate generated responses on relevance, groundedness, helpfulness, and overall quality. Includes calibration on 25-example reviewer subset.
 
-relevance
-groundedness
-helpfulness
-overall quality
+## Results
 
-A reviewer calibration subset is also used to measure agreement between the LLM judge and reviewer scores.
+All results are from the frozen 200-example golden evaluation set unless otherwise stated.
 
-The full evaluation uses the Groq API and may be affected by provider rate/token limits. The reported results therefore distinguish successful predictions from unavailable provider calls.
+### Intent Classification Accuracy
 
-Results
+| System | Accuracy | Macro F1 | Notes |
+|--------|----------|----------|-------|
+| Majority baseline | 17.0% | 0.032 | Predicts most common intent |
+| TF-IDF + Logistic Regression | 75.0% | 0.651 | 80/20 stratified split; directional, not robust |
+| GPT-OSS-20B (Groq) | 61.5% | 0.543 | 195/200 successful; small reviewed set |
 
-Results below are from the frozen 200-example evaluation set unless otherwise stated.
+**Important caveat:** The 61.5% accuracy should not be interpreted as production performance. It is based on a 200-example reviewed evaluation set with AI-assisted labels. Results may vary significantly on different distributions or with different annotators.
 
-System	Accuracy	Macro F1
-Majority baseline	17.0%	0.032
-TF-IDF + Logistic Regression	75.0%*	0.651*
-GPT-OSS-20B	61.5%*	0.543*
+### Escalation Decision
 
-* The GPT-OSS-20B result is based on 195 successful predictions out of 200.
+| Metric | Value |
+|--------|-------|
+| Accuracy | 70.2% |
+| Precision | 66.7% |
+| Recall | 6.9% |
+| F1 | 12.5% |
 
-The TF-IDF result uses an 80/20 stratified split with a 40-example test set, so it is directional rather than a robust production estimate.
+**Critical limitation:** Low recall (6.9%) indicates the current policy is overly conservative and misses many cases that reviewers marked for escalation. The high accuracy is misleading—it reflects the class imbalance (most examples are not escalations) rather than strong escalation performance.
 
-Escalation
-
-The escalation evaluation achieved:
-
-Accuracy:  70.2%
-Precision: 66.7%
-Recall:     6.9%
-F1:         12.5%
-
-The low escalation recall is an important limitation: the current policy is too conservative and misses many cases that reviewers marked for escalation.
-
-LLM judge calibration
+### LLM Judge Calibration
 
 On a 25-example reviewer calibration subset:
 
-Overall within ±1 point: 84%
-Helpfulness within ±1:  84%
-Relevance within ±1:    80%
-Groundedness within ±1: 76%
+| Dimension | Agreement (±1 point) |
+|-----------|----------------------|
+| Overall | 84% |
+| Helpfulness | 84% |
+| Relevance | 80% |
+| Groundedness | 76% |
 
-Groundedness showed the largest disagreement between the reviewer and LLM judge, indicating that the judge can be overly optimistic about whether a response is actually supported by historical evidence.
+Groundedness showed the largest disagreement, indicating the LLM judge can be overly optimistic about whether responses are grounded in historical evidence.
 
-The reviewer labels used for this calibration were AI-assisted and manually reviewed, so these numbers should be treated as calibration evidence rather than independent inter-annotator agreement.
+## Failure Analysis
 
-Project Structure
+### 1. Escalation Recall is Very Low
+
+The current rule-based policy misses many cases that should be escalated to humans. Improving escalation recall is the highest priority.
+
+### 2. Intent Boundaries Remain Difficult
+
+Update-related problems often overlap with device performance and battery issues. The taxonomy is small by design, but boundary cases remain hard to classify.
+
+### 3. Retrieval Similarity Does Not Guarantee Grounding
+
+A highly similar historical example can still lead to an unsupported or inaccurate generated response. Grounding validation is weak.
+
+### 4. LLM Judge Overestimates Groundedness
+
+The LLM judge agrees with human reviewers on groundedness only 76% of the time, versus 80%+ on other dimensions. The judge tends to be optimistic.
+
+### 5. Provider Limits Affect Reproducibility
+
+Groq rate and token limits can prevent every example from completing in a single evaluation run. Results distinguish successful from unavailable provider calls.
+
+## Why 61.5% Should Not Be Treated as Production Accuracy
+
+**Specific Limitations:**
+
+- **Small evaluation set:** 200 examples is sufficient for directional evaluation, not production benchmarking
+- **AI-assisted labels:** Golden labels are AI-generated and manually reviewed, not independent human ground truth
+- **Provider limitations:** 195 out of 200 successful predictions; failed calls were skipped
+- **Imbalanced classes:** Some intents (e.g., `OTHER`) may be under-represented
+- **Directional comparison:** The TF-IDF baseline (75%) is also directional—an 80/20 split on 40 test examples
+- **No production dataset:** Evaluation is only on the frozen golden set; real-world distribution is unknown
+- **Low escalation recall:** The complementary escalation recall of 6.9% reveals the system is overly conservative
+
+**Conclusion:** The 61.5% is a useful directional signal that the Groq-based classifier performs worse than the TF-IDF baseline on this small task. It should not be extrapolated to production performance.
+
+## One More Week: Improvement Priorities
+
+### 1. Improve Escalation Recall
+
+Redesign the escalation policy to catch more cases that require human review. Current threshold-based rules are too simple.
+
+### 2. Improve Retrieval
+
+Experiment with dense retrieval (embeddings) and retrieval re-ranking to better surface relevant historical examples.
+
+### 3. Improve Response Grounding
+
+Add validation steps to check that generated responses are actually grounded in retrieved evidence before returning them.
+
+### 4. Strengthen Evaluation
+
+Collect independent multi-annotator human labels for a subset of golden examples to establish true inter-annotator agreement and reduce AI-assist bias.
+
+### 5. Improve Reliability
+
+Add error handling for provider rate limits, implement retry logic, and set up comprehensive logging for debugging.
+
+## Project Structure
+
+```
 hiver-sde-ai-support-agent/
 │
 ├── configs/
-│   ├── intent_taxonomy.yaml
-│   └── llm.yaml
+│   ├── intent_taxonomy.yaml          # 10-intent taxonomy definitions
+│   └── llm.yaml                       # LLM configuration
 │
 ├── data/
 │   ├── golden/
-│   │   └── golden_set_v1.csv
-│   ├── raw/
-│   │   └── .gitkeep
-│   ├── processed/
-│   │   └── .gitkeep
+│   │   └── golden_set_v1.csv          # 200-example frozen evaluation set
+│   ├── raw/                           # Raw dataset (not included)
+│   ├── processed/                     # Processed interactions
 │   └── README.md
 │
 ├── evaluation/
@@ -232,135 +318,144 @@ hiver-sde-ai-support-agent/
 │
 ├── reports/
 │   ├── README.md
-│   ├── applesupport_summary.csv
-│   ├── brand_selection.csv
-│   ├── conversation_summary.csv
-│   └── interaction_summary.csv
+│   ├── applesupport_summary.csv       # Brand summary stats
+│   ├── brand_selection.csv            # Brand selection analysis
+│   ├── conversation_summary.csv       # Conversation structure
+│   └── interaction_summary.csv        # Interaction corpus stats
 │
 ├── scripts/
-│   ├── 01_audit.py
-│   ├── 02_clean.py
-│   ├── 02_select_brand.py
-│   ├── 03_reconstruct.py
-│   ├── 04_extract_interactions.py
-│   ├── 05_select_brand.py
-│   ├── 06_inspect_intents.py
-│   ├── 07_baseline_majority.py
-│   ├── 08_baseline_tfidf.py
-│   ├── 09_test_ai_classifier.py
-│   ├── 10_evaluate_ai_classifier.py
-│   ├── 11_test_retrieval.py
-│   ├── 12_test_response.py
-│   ├── 13_test_escalation.py
-│   ├── 14_evaluate_responses.py
-│   ├── 15_evaluate_escalation.py
-│   ├── 16_prepare_judge_set.py
-│   └── 17_llm_judge.py
+│   ├── 01_audit.py                    # Audit raw dataset
+│   ├── 02_clean.py                    # Clean and validate data
+│   ├── 02_select_brand.py             # Brand selection analysis
+│   ├── 03_reconstruct.py              # Reconstruct conversation threads
+│   ├── 04_extract_interactions.py     # Extract customer → support pairs
+│   ├── 05_select_brand.py             # Final brand selection
+│   ├── 06_inspect_intents.py          # Inspect intent distribution
+│   ├── 07_baseline_majority.py        # Majority baseline evaluation
+│   ├── 08_baseline_tfidf.py           # TF-IDF baseline evaluation
+│   ├── 09_test_ai_classifier.py       # Quick test of AI classifier
+│   ├── 10_evaluate_ai_classifier.py   # Full AI classifier evaluation
+│   ├── 11_test_retrieval.py           # Quick test of retrieval
+│   ├── 12_test_response.py            # End-to-end pipeline test
+│   ├── 13_test_escalation.py          # Quick test of escalation
+│   ├── 14_evaluate_responses.py       # Response generation evaluation
+│   ├── 15_evaluate_escalation.py      # Escalation evaluation
+│   ├── 16_prepare_judge_set.py        # Prepare set for LLM judge
+│   └── 17_llm_judge.py                # LLM-as-judge evaluation
 │
 ├── src/
-│   ├── baselines/
-│   ├── brand_selection/
-│   ├── classifier/
-│   ├── conversations/
-│   ├── data/
-│   ├── escalation/
-│   ├── evaluation/
-│   ├── golden_set/
-│   ├── intent_discovery/
-│   ├── interactions/
-│   ├── response/
-│   └── retrieval/
+│   ├── baselines/                     # Baseline implementations
+│   ├── brand_selection/               # Brand selection logic
+│   ├── classifier/                    # Intent classification
+│   ├── conversations/                 # Conversation reconstruction
+│   ├── data/                          # Data loading and processing
+│   ├── escalation/                    # Escalation decision logic
+│   ├── evaluation/                    # Evaluation utilities
+│   ├── golden_set/                    # Golden set utilities
+│   ├── intent_discovery/              # Intent taxonomy discovery
+│   ├── interactions/                  # Interaction extraction
+│   ├── response/                      # Response generation
+│   └── retrieval/                     # Historical retrieval
 │
 ├── tests/
-│   └── test_clean.py
+│   └── test_clean.py                  # Unit tests for data cleaning
 │
 ├── .gitignore
 ├── requirements.txt
 ├── README.md
-└── Hiver SDE Intern Report.pdf
-Key Design Decisions
-1. Direct customer → support interactions
+└── Hiver SDE Intern Report.pdf        # Detailed take-home report
+```
 
-Rather than treating every connected conversation component as one clean dialogue, the pipeline extracts direct customer → AppleSupport reply pairs.
+## Key Design Decisions
 
-This avoids incorrectly treating large announcement/reply threads as single customer conversations.
+### 1. Direct Customer → Support Interactions
 
-2. Context-aware intent classification
+Rather than treating every connected conversation component as a single clean dialogue, the pipeline extracts direct customer → AppleSupport reply pairs. This avoids incorrectly modeling large Twitter announcement threads as single customer conversations.
 
-Previous context is provided for follow-up messages where available.
+### 2. Context-Aware Intent Classification
 
-This helps distinguish cases where the latest message alone is ambiguous but clearly refers to an ongoing support issue.
+Previous conversation context is provided for follow-up messages when available. This helps disambiguate cases where the latest message alone is ambiguous but clearly refers to an ongoing support issue.
 
-3. TF-IDF retrieval
+### 3. TF-IDF Retrieval
 
-Historical interactions are retrieved using TF-IDF cosine similarity.
+Historical interactions are retrieved using TF-IDF cosine similarity because:
+- It is interpretable and efficient
+- It scales to the corpus size
+- Retrieved examples are human-readable for validation
 
-The retriever:
-
-normalizes URLs and mentions
-uses word bigrams
-uses sublinear TF scaling
-retrieves the most similar historical customer messages
-4. Evidence-aware response generation
+### 4. Evidence-Aware Response Generation
 
 The response generator is instructed to use retrieved interactions as historical evidence and avoid:
+- Copying historical replies verbatim
+- Claiming a historical action definitely solved the issue
+- Inventing policies, troubleshooting steps, or technical facts
 
-copying historical replies verbatim
-claiming that a historical action definitely solved the issue
-inventing policies
-inventing troubleshooting steps
-inventing guarantees or technical facts
-5. Conservative escalation policy
+### 5. Conservative Escalation Policy
 
-The current policy escalates when:
+The current policy is intentionally conservative—it escalates when confidence is low, evidence is weak, or the intent is payment-related. Missing an escalation is treated as worse than over-escalating.
 
-intent confidence is below the threshold
-historical retrieval evidence is weak
-the intent is payment/transaction related
+## Data and Reproducibility
 
-This policy is intentionally simple and is one of the areas identified for improvement.
+### Included
 
-Known Limitations
+- `data/golden/golden_set_v1.csv` — Frozen 200-example evaluation set (AI-assisted labels, manually reviewed)
+- `configs/intent_taxonomy.yaml` — 10-intent taxonomy
+- `src/` — All source code for the pipeline
+- `scripts/` — All evaluation and test scripts
+- `Hiver SDE Intern Report.pdf` — Detailed analysis and findings
 
-The system is a prototype rather than a production support agent.
+### Excluded
 
-Important limitations include:
+- The raw Twitter Customer Support dataset (not included due to size and licensing)
+- The full AppleSupport interaction corpus is processed but `data/raw/` is not committed
 
-Escalation recall is low. The current rule-based policy misses many cases requiring human review.
-Intent boundaries remain difficult. In particular, update-related problems can overlap with device performance and battery issues.
-Retrieval similarity does not guarantee grounding. A highly similar historical example can still lead to an unsupported generated response.
-The LLM judge can overestimate groundedness. Reviewer calibration showed weaker agreement on groundedness than on other dimensions.
-Evaluation labels are AI-assisted and manually reviewed. They are not independent multi-annotator human labels.
-Provider limits affect reproducibility. Groq rate/token limits can prevent every example from completing in one run.
-The system does not perform real account, payment, refund, or backend actions.
-Detailed Report
+### Running Evaluation
 
-The complete take-home report is included in the repository:
+To run the full evaluation pipeline, you will need:
+1. Groq API key (`.env` file)
+2. Processed AppleSupport interactions (`data/processed/applesupport_interactions.csv`)
 
-Hiver SDE Intern Report.pdf
+If the processed data is missing, you can reconstruct it by running the data pipeline scripts in order:
+```bash
+python scripts/01_audit.py
+python scripts/02_clean.py
+python scripts/03_reconstruct.py
+python scripts/04_extract_interactions.py
+```
 
-The report contains:
+## Limitations
 
-problem framing
-dataset and interaction construction
-intent taxonomy
-baseline comparison
-evaluation results
-failure analysis
-misleading headline-number analysis
-one-more-week improvement plan
-decision log
-Scope
+This is a prototype, not a production support agent. Important limitations include:
 
-This project focuses on demonstrating an end-to-end AI support-agent architecture.
+- **Escalation recall is very low (6.9%)** — The current rule-based policy misses many cases requiring human review
+- **Intent boundaries are difficult** — Update-related problems overlap with device performance and battery issues
+- **Retrieval does not guarantee grounding** — Similar historical examples can still lead to unsupported responses
+- **LLM judge overestimates groundedness** — Reviewer calibration showed weaker agreement on this dimension
+- **Evaluation labels are AI-assisted** — Not independent multi-annotator ground truth
+- **Provider rate limits** — Evaluation runs can be interrupted by Groq rate/token limits
+- **No autonomous actions** — The system does not perform real account, payment, refund, or backend operations
+- **No production UI** — This is a backend prototype, not a customer-facing system
 
-It does not attempt to build:
+## Detailed Report
 
-a production customer-support UI
-a complete Apple knowledge base
-autonomous account actions
-payment/refund execution
-guaranteed issue resolution
-a full-scale production deployment
+The complete analysis is in:
 
-The goal is to demonstrate how historical support interactions can be combined with intent classification, retrieval, response generation, and escalation into a measurable support-agent workflow.
+**[Hiver SDE Intern Report.pdf](https://github.com/vigneshsai4202/hiver-sde-ai-support-agent/blob/main/Hiver%20SDE%20Intern%20Report.pdf)**
+
+The report includes:
+- Detailed problem framing and dataset analysis
+- Brand selection justification and interaction corpus construction
+- Baseline design and results
+- Full evaluation results with confidence intervals
+- Failure mode analysis and case studies
+- Misleading headline-number analysis (why 61.5% is not production accuracy)
+- One-more-week improvement plan
+- Complete decision log
+
+## Repository
+
+[github.com/vigneshsai4202/hiver-sde-ai-support-agent](https://github.com/vigneshsai4202/hiver-sde-ai-support-agent)
+
+---
+
+**Submission for Hiver SDE Intern Role**
