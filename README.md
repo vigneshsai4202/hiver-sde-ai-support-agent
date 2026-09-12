@@ -30,4 +30,7 @@ python scripts/12_test_response.py
 
 ### 4. Reproduce evaluation
 
-python scripts/05_build_golden_set.py
+Run the AI classifier evaluation:
+
+```bash
+python scripts/10_evaluate_ai_classifier.py
