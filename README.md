@@ -93,8 +93,7 @@ The current rule-based escalation policy escalates when:
 - Historical retrieval evidence is weak
 - The intent is payment/transaction related (`PAYMENTS_PURCHASES`)
 
-**Note:** The escalation recall is deliberately conservative (6.9%), which means the policy intentionally errs toward human escalation. This is appropriate for high-stakes support but is not well-optimized for balancing precision and recall.
-
+**Note:** The escalation recall is very low (6.9%), meaning the current policy misses many cases that reviewers marked for escalation. The policy is therefore not well-optimized for the high-recall escalation objective and requires further calibration.
 ## Quick Start
 
 ### 1. Clone the repository
@@ -392,7 +391,7 @@ The response generator is instructed to use retrieved interactions as historical
 
 ### 5. Conservative Escalation Policy
 
-The current policy is intentionally conservative—it escalates when confidence is low, evidence is weak, or the intent is payment-related. Missing an escalation is treated as worse than over-escalating.
+The current policy uses simple threshold-based rules: it escalates when intent confidence is low, historical evidence is weak, or the intent is payment-related. Evaluation shows that this policy is too conservative in practice, with only 6.9% escalation recall.
 
 ## Data and Reproducibility
 
