@@ -16,17 +16,23 @@ Given a customer message, the system:
 
 ### 1. Install dependencies
 
+```bash
 pip install -r requirements.txt
+```
 
 ### 2. Configure API key
 
 Create `.env`:
 
+```
 GROQ_API_KEY=your_key_here
+```
 
 ### 3. Run the example
 
+```bash
 python scripts/12_test_response.py
+```
 
 ### 4. Reproduce evaluation
 
@@ -34,3 +40,4 @@ Run the AI classifier evaluation:
 
 ```bash
 python scripts/10_evaluate_ai_classifier.py
+```
